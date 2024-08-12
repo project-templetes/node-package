@@ -1,0 +1,25 @@
+{
+  "name": "next-create",
+  "version": "0.0.1",
+  "main": "dist/next-create.js",
+  "bin": {
+    "next-create": "./dist/next-create.js"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "start": "ts-node --loader @esbuild-kit/esm-loader src/next-create.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@esbuild-kit/esm-loader": "^2.6.5",
+    "@types/node": "^22.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  }
+}

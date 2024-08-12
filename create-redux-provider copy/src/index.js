@@ -1,0 +1,233 @@
+#!/usr/bin/env node
+
+import * as fs from "fs";
+import * as path from "path";
+import inquirer from "inquirer";
+import { Command } from "commander";
+
+const Error = "\x1b[31m%s\x1b[0m"; // ANSI escape code for red text
+const Green = "\x1b[32m%s\x1b[0m"; // ANSI escape code for green text
+const Blue = "\x1b[34m%s\x1b[0m"; // ANSI escape code for blue text
+const Reset = "\x1b[0m"; // ANSI escape code to reset color
+
+async function askQuestion(cwd){
+  const dir = await handleDirPrompt(cwd, cwd);
+  const [baseDir, statesDir] = await handleDirNamePrompt(dir);
+  const framework = await handleFrameworkPrompt();
+  const typescript = await handleTypescriptPrompt();
+  console.log('\x1b[32m->\x1b[0m \x1b[34m', baseDir, Reset);
+  console.log('\x1b[32m->\x1b[0m \x1b[34m', framework, typescript ? 'TS' : 'JS', Reset);
+  return {
+    baseDir,
+    statesDir,
+    framework,
+    typescript,
+  }
+}
+
+async function handleDirPrompt(cwd, dir) {
+  const ans = await inquirer.prompt([
+    {
+      type: "input",
+      name: "baseDir",
+      message: "Where do you want to create the redux-provider?",
+      default: dir.split(path.sep).pop(),
+    },
+  ]);
+
+  // if ans.dir is equal to detault value, then it means the user wants to create the redux-provider in the current directory. So we return the current directory
+
+  if (ans.baseDir !== dir.split(path.sep).pop()) {
+    if (path.isAbsolute(ans.baseDir)) { // Check if the provided path is absolute
+      dir = ans.baseDir;
+    } else {
+      dir = path.join(dir, ans.baseDir);
+    }
+  } 
+
+  const exists = fs.existsSync(dir);
+  if (!exists) {
+    console.log(Error, `Directory ${dir} does not exist`);
+    dir = path.join(dir, "..");
+    console.log(Green, dir);
+    const dirs = fs.readdirSync(dir).filter((file) => (!file.startsWith(".") && fs.statSync(path.join(dir, file)).isDirectory()));
+    console.log("Available folders in the directory: ");
+    dirs.forEach((dir) => {
+      console.log(Blue, dir);
+    });
+    return handleDirPrompt(cwd, dir);
+  }
+
+  const confirm = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "confirm",
+      message: `Is this the correct directory? ${dir}`,
+      default: true,
+    },
+  ]);
+
+  if (!confirm.confirm) {
+    console.log(Green, dir);
+    const dirs = fs.readdirSync(dir).filter((file) => (!file.startsWith(".") && fs.statSync(path.join(dir, file)).isDirectory()));
+    console.log("Available folders in the directory: ");
+    dirs.forEach((dir) => {
+      console.log(Blue, dir);
+    });
+    return handleDirPrompt(cwd, dir);
+  }
+  return dir;
+}
+
+async function handleDirNamePrompt(dir) {
+  const ans = await inquirer.prompt([
+    {
+      type: "input",
+      name: "dir",
+      message: "Enter the name of the directory",
+      default: "redux-provider",
+    },
+  ]);
+
+  const exists = fs.existsSync(path.join(dir, ans.dir));
+  if (exists) {
+    console.log(Error, `Directory ${dir} already exists`);
+    return handleDirNamePrompt(dir);
+  }
+
+  return [
+    path.join(dir, ans.dir),
+    path.join(dir, ans.dir, "states"),
+  ]
+}
+
+async function handleFrameworkPrompt() {
+  const ans = await inquirer.prompt([
+    {
+      type: "list",
+      name: "framework",
+      message: "What type of project you are using?",
+      choices: ["Next", "React"],
+    },
+  ]);
+
+  return ans.framework;
+}
+
+async function handleTypescriptPrompt() {
+  const ans = await inquirer.prompt([
+    {
+      type: "confirm",
+      name: "typescript",
+      message: "Are you using TypeScript?",
+    },
+  ]);
+
+  return ans.typescript;
+}
+
+function create(config) {
+  const baseDir = config.baseDir;
+  const statesDir = config.statesDir;
+  const isNext = "next" === `${config.framework}`.toLowerCase();
+  const isTypescript = config.typescript;
+
+  // Create directories
+  fs.mkdirSync(statesDir, { recursive: true });
+
+  // Create and write to auth.[ts|js]
+  const authContent = `${isNext ? "'use client';" : ""}
+import { createSlice } from "@reduxjs/toolkit";
+import { useLocalStorage } from "../use-local-storage";
+
+const {
+    readLocalStorage, 
+    updateLocalStorage
+} = useLocalStorage('auth', {
+    isAuth: false,
+    token: "",
+  });
+  
+const auth = createSlice({
+    name: "auth",
+    initialState: readLocalStorage(),
+    reducers: {
+        logout: () => updateLocalStorage(null),
+        login: (state, action) =>  updateLocalStorage({
+            isAuth: true,
+            ...(action.payload)
+        })
+
+    }
+})
+
+export default auth;
+`;
+  fs.writeFileSync(path.join(statesDir, isTypescript ? 'auth.ts' : 'auth.js'), authContent);
+
+  // Create and write to index.[tsx|jsx]
+  const indexContent = `${isNext ? "'use client';" : ""}
+import { Provider } from "react-redux";
+import { configureStore } from "@reduxjs/toolkit";
+import auth from "./states/auth";
+import React, { useEffect } from "react";
+const store = configureStore({
+  reducer: {
+    auth: auth.reducer,
+  },
+});
+export const authActions = auth.actions;
+export default function ReduxProvider({ children }${isTypescript ? ": { children: React.ReactNode }" : ""}) {
+  useEffect(() => {}, []);
+  return <Provider store={store}>{children}</Provider>;
+};
+`;
+  fs.writeFileSync(path.join(baseDir, isTypescript ? 'index.tsx' : 'index.jsx'), indexContent);
+
+  // Create and write to use-local-storage.[ts|js]
+  const useLocalStorageContent = `export const useLocalStorage = (key${isTypescript ? ": string" : ""}, defaultState${isTypescript ? ": any" : ""}) => {
+  return {
+      updateLocalStorage: (data${isTypescript ? ": any" : ""} = null) => {
+          if (!data) return localStorage.removeItem(key);
+          localStorage.setItem(key, JSON.stringify(data));
+      },
+      readLocalStorage: () => {
+          if (typeof window !== 'undefined') {
+            const data = localStorage.getItem(key);
+            return !!data && data !== "undefined"
+              ? JSON.parse(data) 
+              : defaultState;
+          } 
+          return defaultState;
+        },
+        
+  }
+}
+`;
+  fs.writeFileSync(
+    path.join(baseDir, isTypescript ? 'use-local-storage.ts' : 'use-local-storage.js'),
+    useLocalStorageContent
+  );
+
+  console.log("Redux provider structure created successfully.");
+}
+
+const program = new Command();
+
+program.parse(process.argv);
+
+if (program.args.length === 0) {
+    const cwd = process.cwd();
+    askQuestion(cwd)
+    .then(async (ans) => {
+        console.log(ans)
+        create(ans);
+    })
+    .catch(err => {
+        if (err.name === 'ExitPromptError') {
+            console.log(Error, 'Prompt was force closed by the user.');
+        } else {
+            console.error(err);
+        }
+    });
+}

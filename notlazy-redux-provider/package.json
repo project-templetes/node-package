@@ -1,0 +1,39 @@
+{
+  "name": "notlazy-redux-provider",
+  "version": "0.0.6",
+  "main": "dist/index.js",
+  "source": "src/index.js",
+  "type": "module",
+  "module": "dist/index.module.js",
+  "unpkg": "dist/index.umd.js",
+  "bin": {
+    "notlazy-redux-provider": "dist/index.module.js"
+  },
+  "scripts": {
+    "build": "microbundle --config microbundle.config.js"
+  },
+  "devDependencies": {
+    "microbundle": "^0.15.1"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "inquirer": "^10.1.8"
+  },
+  "keywords": [
+    "redux",
+    "provider",
+    "dry",
+    "nextjs",
+    "react",
+    "reactjs"
+  ],
+  "author": "notlazy",
+  "license": "ISC",
+  "description": "A simple redux provider to follow the DRY principle",
+  "files": [
+    "dist",
+    "README.md",
+    "package.json"
+  ]
+}
